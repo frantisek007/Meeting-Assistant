@@ -103,13 +103,9 @@
   }
   #history::-webkit-scrollbar { width: 3px; }
   #history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-<<<<<<< HEAD
   .history-item { animation: fadeUp 0.3s ease; cursor: pointer; padding: 8px 10px; border-radius: 6px; border: 1px solid transparent; transition: all 0.2s; }
   .history-item:hover { border-color: var(--accent); background: rgba(245,158,11,0.05); }
   .history-item.active { border-color: var(--accent); background: rgba(245,158,11,0.08); }
-=======
-  .history-item { animation: fadeUp 0.3s ease; }
->>>>>>> 4bb9b10c368227558637762c094e841209df3c98
   .history-q { font-size: 11px; color: var(--accent); margin-bottom: 2px; }
   .history-a { font-size: 11px; color: var(--muted); line-height: 1.5; }
   @keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
@@ -336,13 +332,19 @@ Regeln:
   let finalText = "";
   let phase = "idle"; // idle | listening | thinking | answer
   let history = [];
-  let apiKey = localStorage.getItem("mtg_api_key") || "";
+  let apiKey = "";
+  try { apiKey = localStorage.getItem("mtg_api_key") || ""; } catch(e) {}
 
-  // Init
+  // Init - show/hide banner
   if (apiKey) {
     document.getElementById("api-key-input").value = apiKey;
     document.getElementById("api-banner").style.display = "none";
   }
+
+  // Allow Enter key in API input
+  document.getElementById("api-key-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveKey();
+  });
 
   if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
     document.getElementById("not-supported").style.display = "block";
@@ -351,10 +353,27 @@ Regeln:
 
   function saveKey() {
     const k = document.getElementById("api-key-input").value.trim();
-    if (!k) return;
+    if (!k) {
+      document.getElementById("api-key-input").style.borderColor = "var(--danger)";
+      return;
+    }
+    if (!k.startsWith("sk-ant-")) {
+      document.getElementById("api-key-input").style.borderColor = "var(--danger)";
+      document.getElementById("api-key-input").placeholder = "Kľúč musí začínať sk-ant-...";
+      return;
+    }
     apiKey = k;
-    localStorage.setItem("mtg_api_key", k);
+    try { localStorage.setItem("mtg_api_key", k); } catch(e) {}
     document.getElementById("api-banner").style.display = "none";
+    document.getElementById("hint").textContent = "Mikrofon drücken und Frage stellen";
+    // Flash green on mic button to confirm ready
+    const micBtn = document.getElementById("mic-btn");
+    micBtn.style.borderColor = "#22c55e";
+    micBtn.style.background = "rgba(34,197,94,0.1)";
+    setTimeout(() => {
+      micBtn.style.borderColor = "";
+      micBtn.style.background = "";
+    }, 1500);
   }
 
   function setPhase(p) {
@@ -562,7 +581,6 @@ Regeln:
 
   function addToHistory(q, a) {
     const hist = document.getElementById("history");
-<<<<<<< HEAD
     const idx = history.length - 1;
     const item = document.createElement("div");
     item.className = "history-item";
@@ -578,12 +596,6 @@ Regeln:
       answerCard.style.display = "block";
       answerCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
     };
-=======
-    const item = document.createElement("div");
-    item.className = "history-item";
-    const preview = a.replace(/\*\*/g, "").split("\n")[0].slice(0, 100);
-    item.innerHTML = `<div class="history-q">? ${q}</div><div class="history-a">${preview}${a.length > 100 ? "…" : ""}</div>`;
->>>>>>> 4bb9b10c368227558637762c094e841209df3c98
     hist.appendChild(item);
     hist.scrollTop = hist.scrollHeight;
   }
