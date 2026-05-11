@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090f;
+    --surface: #0d1117;
+    --border: #1a2233;
+    --accent: #f59e0b;
+    --accent2: #6366f1;
+    --text: #cbd5e1;
+    --muted: #3d5068;
+    --danger: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  #header-left { display: flex; align-items: center; gap: 10px; }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #22c55e;
+    transition: background 0.3s;
+  }
+  #status-dot.listening { background: var(--accent); animation: pulse-dot 1s ease-in-out infinite; }
+  #status-dot.thinking { background: var(--accent2); animation: pulse-dot 0.6s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  #header-title { font-size: 11px; letter-spacing: 0.15em; color: var(--muted); text-transform: uppercase; }
+  #header-right { display: flex; align-items: center; gap: 12px; }
+  #status-label { font-size: 11px; color: var(--muted); }
+  #btn-clear {
+    font-size: 11px; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); padding: 3px 10px; border-radius: 4px;
+    cursor: pointer; font-family: 'JetBrains Mono', monospace;
+    transition: color 0.2s;
+    display: none;
+  }
+  #btn-clear:hover { color: var(--text); }
+
+  /* API Key banner */
+  #api-banner {
+    background: #1a1200;
+    border-bottom: 1px solid #3d2800;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #fbbf24;
+  }
+  #api-banner input {
+    flex: 1;
+    background: #0d0900;
+    border: 1px solid #3d2800;
+    color: #fbbf24;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+  #api-banner input:focus { border-color: var(--accent); }
+  #btn-save-key {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 5px 14px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* History */
+  #history {
+    overflow-y: auto;
+    max-height: 30vh;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: none;
+    gap: 12px;
+    flex-direction: column;
+  }
+  #history::-webkit-scrollbar { width: 3px; }
+  #history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .history-item { animation: fadeUp 0.3s ease; cursor: pointer; padding: 8px 10px; border-radius: 6px; border: 1px solid transparent; transition: all 0.2s; }
+  .history-item:hover { border-color: var(--accent); background: rgba(245,158,11,0.05); }
+  .history-item.active { border-color: var(--accent); background: rgba(245,158,11,0.08); }
+  .history-q { font-size: 11px; color: var(--accent); margin-bottom: 2px; }
+  .history-a { font-size: 11px; color: var(--muted); line-height: 1.5; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Main */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    gap: 24px;
+  }
+
+  /* Mic button */
+  #mic-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  #mic-btn {
+    width: 88px; height: 88px; border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    font-size: 30px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s;
+    position: relative;
+    outline: none;
+  }
+  #mic-btn:hover:not(:disabled) { border-color: var(--accent); background: #1a1100; }
+  #mic-btn.listening {
+    border-color: var(--accent);
+    background: rgba(245,158,11,0.08);
+    box-shadow: 0 0 0 0 rgba(245,158,11,0.4);
+    animation: mic-pulse 1.4s ease-out infinite;
+  }
+  #mic-btn.thinking {
+    border-color: var(--accent2);
+    background: rgba(99,102,241,0.08);
+    cursor: not-allowed;
+  }
+  @keyframes mic-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(245,158,11,0.5); }
+    70% { box-shadow: 0 0 0 22px rgba(245,158,11,0); }
+    100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
+  }
+
+  /* Wave bars */
+  #wave { display: flex; align-items: center; gap: 3px; height: 28px; }
+  .wave-bar {
+    width: 3px; border-radius: 2px;
+    background: var(--border);
+    height: 5px;
+    transition: background 0.3s;
+  }
+  .wave-bar.active {
+    background: var(--accent);
+    animation: wave-anim 0.7s ease-in-out infinite;
+  }
+  .wave-bar:nth-child(1).active { animation-delay: 0.0s; }
+  .wave-bar:nth-child(2).active { animation-delay: 0.1s; }
+  .wave-bar:nth-child(3).active { animation-delay: 0.2s; }
+  .wave-bar:nth-child(4).active { animation-delay: 0.1s; }
+  .wave-bar:nth-child(5).active { animation-delay: 0.0s; }
+  .wave-bar:nth-child(6).active { animation-delay: 0.1s; }
+  .wave-bar:nth-child(7).active { animation-delay: 0.2s; }
+  @keyframes wave-anim { 0%,100%{height:4px} 50%{height:26px} }
+
+  #hint { font-size: 11px; color: var(--muted); text-align: center; min-height: 16px; }
+
+  /* Transcript */
+  #transcript-box {
+    font-size: 12px;
+    color: var(--accent);
+    text-align: center;
+    min-height: 18px;
+    max-width: 500px;
+    line-height: 1.5;
+  }
+  #interim { color: #7c5a1e; font-style: italic; }
+
+  /* Answer card */
+  #answer-card {
+    width: 100%;
+    max-width: 620px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 16px 20px;
+    display: none;
+    animation: fadeUp 0.3s ease;
+  }
+  #answer-q {
+    font-size: 11px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  #answer-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.75;
+  }
+  #answer-text .bullet { display: flex; gap: 8px; margin-top: 4px; }
+  #answer-text .bullet-icon { color: var(--accent); font-size: 10px; margin-top: 5px; flex-shrink: 0; }
+  #answer-text strong { color: #fcd34d; font-weight: 600; }
+  #answer-text .step { margin-left: 4px; margin-top: 4px; }
+  #answer-text .spacer { height: 6px; }
+
+  /* Thinking dots */
+  #thinking-dots { display: none; gap: 6px; align-items: center; }
+  .tdot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2);
+    animation: tdot-blink 1.2s ease-in-out infinite;
+  }
+  .tdot:nth-child(2) { animation-delay: 0.2s; }
+  .tdot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes tdot-blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+  /* Error */
+  #error-msg { color: var(--danger); font-size: 12px; text-align: center; display: none; }
+
+  /* Footer */
+  #footer {
+    border-top: 1px solid var(--border);
+    padding: 9px 20px;
+    text-align: center;
+    font-size: 10px;
+    color: #1e2d3d;
+  }
+
+  /* Not supported */
+  #not-supported { display: none; text-align: center; color: var(--danger); font-size: 14px; padding: 40px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div id="header-left">
+    <div id="status-dot"></div>
+    <span id="header-title">Meeting Assistant</span>
+  </div>
+  <div id="header-right">
+    <span id="status-label"></span>
+    <button id="btn-clear" onclick="clearAll()">reset</button>
+  </div>
+</div>
+
+<!-- API Key Banner -->
+<div id="api-banner">
+  <span>🔑 Anthropic API-Schlüssel:</span>
+  <input type="password" id="api-key-input" placeholder="sk-ant-..." />
+  <button id="btn-save-key" onclick="saveKey()">Speichern</button>
+</div>
+
+<!-- History -->
+<div id="history"></div>
+
+<!-- Main -->
+<div id="main">
+  <div id="not-supported">
+    ⚠️ Dein Browser unterstützt keine Spracherkennung.<br>Bitte Chrome oder Edge verwenden.
+  </div>
+
+  <div id="mic-wrap">
+    <button id="mic-btn" onclick="toggleMic()">🎙</button>
+    <div id="wave">
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+    </div>
+    <div id="hint">Mikrofon drücken und Frage stellen</div>
+  </div>
+
+  <div id="transcript-box">
+    <span id="final-text"></span>
+    <span id="interim"></span>
+  </div>
+
+  <div id="thinking-dots">
+    <div class="tdot"></div>
+    <div class="tdot"></div>
+    <div class="tdot"></div>
+  </div>
+
+  <div id="answer-card">
+    <div id="answer-q"></div>
+    <div id="answer-text"></div>
+  </div>
+
+  <div id="error-msg"></div>
+</div>
+
+<!-- Footer -->
+<div id="footer">
+  Mikrofon drücken · DE Sprache · nach 2 Sek. Stille automatisch senden
+</div>
+
+<script>
+  const SYSTEM_PROMPT = `Du bist ein erfahrener Microsoft Workplace Engineer und IT-Consultant. Der Nutzer ist in einem Projektmeeting und braucht SCHNELLE, PRÄZISE und PRAKTISCHE Antworten.
+
+Kontext:
+- Freelance Microsoft Workplace Engineer
+- Expertise: SCCM, Microsoft Intune, Co-Management, Software Lifecycle Management, Endpoint Management
+- IT-Projektmeeting (wahrscheinlich Workplace/Endpoint Management)
+
+Regeln:
+1. Antworte auf DEUTSCH
+2. Sei KURZ — max. 4–5 Sätze oder Stichpunkte
+3. Bei Fachbegriffen: kurze Erklärung + praktischer Tipp
+4. Bei "Wie macht man X": max. 5 konkrete Schritte
+5. Formatiere mit ** für wichtige Begriffe
+6. Beginne direkt mit der Antwort — kein "Natürlich..." oder "Gerne..."`;
+
+  let recognition = null;
+  let silenceTimer = null;
+  let finalText = "";
+  let phase = "idle"; // idle | listening | thinking | answer
+  let history = [];
+  let apiKey = localStorage.getItem("mtg_api_key") || "";
+
+  // Init
+  if (apiKey) {
+    document.getElementById("api-key-input").value = apiKey;
+    document.getElementById("api-banner").style.display = "none";
+  }
+
+  if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+    document.getElementById("not-supported").style.display = "block";
+    document.getElementById("mic-wrap").style.display = "none";
+  }
+
+  function saveKey() {
+    const k = document.getElementById("api-key-input").value.trim();
+    if (!k) return;
+    apiKey = k;
+    localStorage.setItem("mtg_api_key", k);
+    document.getElementById("api-banner").style.display = "none";
+  }
+
+  function setPhase(p) {
+    phase = p;
+    const dot = document.getElementById("status-dot");
+    const micBtn = document.getElementById("mic-btn");
+    const waveBars = document.querySelectorAll(".wave-bar");
+    const hint = document.getElementById("hint");
+    const statusLabel = document.getElementById("status-label");
+    const thinkingDots = document.getElementById("thinking-dots");
+
+    dot.className = "";
+    micBtn.className = "";
+    waveBars.forEach(b => b.classList.remove("active"));
+
+    if (p === "idle") {
+      dot.className = "";
+      micBtn.innerHTML = "🎙";
+      hint.textContent = history.length > 0 ? "Drück erneut für die nächste Frage" : "Mikrofon drücken und Frage stellen";
+      statusLabel.textContent = history.length > 0 ? `${history.length} odpovedí` : "";
+      thinkingDots.style.display = "none";
+    } else if (p === "listening") {
+      dot.className = "listening";
+      micBtn.className = "listening";
+      micBtn.innerHTML = "⏹";
+      hint.textContent = "Sprechen... (nach 2 Sek. Stille automatisch senden)";
+      statusLabel.textContent = "🎙 höre zu...";
+      waveBars.forEach(b => b.classList.add("active"));
+      thinkingDots.style.display = "none";
+    } else if (p === "thinking") {
+      dot.className = "thinking";
+      micBtn.className = "thinking";
+      micBtn.innerHTML = "⟳";
+      micBtn.disabled = true;
+      hint.textContent = "Frage wird analysiert...";
+      statusLabel.textContent = "⟳ analysiere...";
+      thinkingDots.style.display = "flex";
+    } else if (p === "answer") {
+      dot.className = "";
+      micBtn.className = "";
+      micBtn.innerHTML = "🎙";
+      micBtn.disabled = false;
+      hint.textContent = "Drück erneut für die nächste Frage";
+      statusLabel.textContent = `${history.length} odpovedí`;
+      thinkingDots.style.display = "none";
+    }
+  }
+
+  function toggleMic() {
+    if (!apiKey) {
+      document.getElementById("api-banner").style.display = "flex";
+      document.getElementById("api-key-input").focus();
+      return;
+    }
+    if (phase === "listening") {
+      stopListening();
+      setPhase("idle");
+    } else if (phase === "idle" || phase === "answer") {
+      startListening();
+    }
+  }
+
+  function startListening() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.lang = "de-DE";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    finalText = "";
+    document.getElementById("final-text").textContent = "";
+    document.getElementById("interim").textContent = "";
+    document.getElementById("error-msg").style.display = "none";
+    setPhase("listening");
+
+    recognition.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalText += " " + e.results[i][0].transcript;
+          document.getElementById("final-text").textContent = finalText.trim();
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+      document.getElementById("interim").textContent = interim;
+      resetSilenceTimer();
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error === "not-allowed") {
+        showError("⚠️ Mikrofonzugriff verweigert. Bitte Mikrofon in den Browser-Einstellungen erlauben.");
+      } else if (e.error !== "aborted") {
+        showError(`Mikrofon-Fehler: ${e.error}`);
+      }
+      setPhase("idle");
+    };
+
+    recognition.start();
+    resetSilenceTimer();
+  }
+
+  function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+      stopListening();
+      const q = finalText.trim();
+      if (q) {
+        askClaude(q);
+      } else {
+        setPhase("idle");
+      }
+    }, 2000);
+  }
+
+  function stopListening() {
+    clearTimeout(silenceTimer);
+    if (recognition) { recognition.stop(); recognition = null; }
+  }
+
+  async function askClaude(question) {
+    document.getElementById("interim").textContent = "";
+    document.getElementById("final-text").textContent = question;
+    setPhase("thinking");
+
+    const answerCard = document.getElementById("answer-card");
+    const answerQ = document.getElementById("answer-q");
+    const answerText = document.getElementById("answer-text");
+
+    answerCard.style.display = "block";
+    answerQ.textContent = "? " + question;
+    answerText.innerHTML = "";
+
+    const msgs = [];
+    history.forEach(h => {
+      msgs.push({ role: "user", content: h.q });
+      msgs.push({ role: "assistant", content: h.a });
+    });
+    msgs.push({ role: "user", content: question });
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5",
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: msgs
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+
+      const text = data.content?.find(b => b.type === "text")?.text || "Keine Antwort erhalten.";
+      renderAnswer(text);
+      history.push({ q: question, a: text });
+      addToHistory(question, text);
+      setPhase("answer");
+
+      if (history.length > 0) {
+        document.getElementById("btn-clear").style.display = "block";
+        document.getElementById("history").style.display = "flex";
+      }
+
+    } catch (err) {
+      showError("⚠️ API Fehler: " + err.message);
+      setPhase("idle");
+    }
+  }
+
+  function renderAnswer(text) {
+    const answerText = document.getElementById("answer-text");
+    answerText.innerHTML = "";
+    const lines = text.split("\n");
+    lines.forEach(line => {
+      if (!line.trim()) {
+        const sp = document.createElement("div");
+        sp.className = "spacer";
+        answerText.appendChild(sp);
+        return;
+      }
+      const div = document.createElement("div");
+      if (line.match(/^[\*\-•]\s/)) {
+        div.className = "bullet";
+        div.innerHTML = `<span class="bullet-icon">▸</span><span>${boldify(line.replace(/^[\*\-•]\s/, ""))}</span>`;
+      } else if (line.match(/^\d+\.\s/)) {
+        div.className = "step";
+        div.innerHTML = boldify(line);
+      } else {
+        div.innerHTML = boldify(line);
+      }
+      answerText.appendChild(div);
+    });
+  }
+
+  function boldify(text) {
+    return text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  }
+
+  function addToHistory(q, a) {
+    const hist = document.getElementById("history");
+    const idx = history.length - 1;
+    const item = document.createElement("div");
+    item.className = "history-item";
+    item.dataset.idx = idx;
+    const preview = a.replace(/\*\*/g, "").split("\n")[0].slice(0, 100);
+    item.innerHTML = `<div class="history-q">? ${q}</div><div class="history-a">${preview}${a.length > 100 ? "…" : ""}</div>`;
+    item.onclick = () => {
+      document.querySelectorAll(".history-item").forEach(el => el.classList.remove("active"));
+      item.classList.add("active");
+      const answerCard = document.getElementById("answer-card");
+      document.getElementById("answer-q").textContent = "? " + q;
+      renderAnswer(a);
+      answerCard.style.display = "block";
+      answerCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    };
+    hist.appendChild(item);
+    hist.scrollTop = hist.scrollHeight;
+  }
+
+  function showError(msg) {
+    const el = document.getElementById("error-msg");
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+
+  function clearAll() {
+    stopListening();
+    setPhase("idle");
+    history = [];
+    finalText = "";
+    document.getElementById("final-text").textContent = "";
+    document.getElementById("interim").textContent = "";
+    document.getElementById("answer-card").style.display = "none";
+    document.getElementById("error-msg").style.display = "none";
+    document.getElementById("history").innerHTML = "";
+    document.getElementById("history").style.display = "none";
+    document.getElementById("btn-clear").style.display = "none";
+  }
+</script>
+</body>
+</html>
