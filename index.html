@@ -103,9 +103,13 @@
   }
   #history::-webkit-scrollbar { width: 3px; }
   #history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+<<<<<<< HEAD
   .history-item { animation: fadeUp 0.3s ease; cursor: pointer; padding: 8px 10px; border-radius: 6px; border: 1px solid transparent; transition: all 0.2s; }
   .history-item:hover { border-color: var(--accent); background: rgba(245,158,11,0.05); }
   .history-item.active { border-color: var(--accent); background: rgba(245,158,11,0.08); }
+=======
+  .history-item { animation: fadeUp 0.3s ease; }
+>>>>>>> 4bb9b10c368227558637762c094e841209df3c98
   .history-q { font-size: 11px; color: var(--accent); margin-bottom: 2px; }
   .history-a { font-size: 11px; color: var(--muted); line-height: 1.5; }
   @keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
@@ -558,6 +562,7 @@ Regeln:
 
   function addToHistory(q, a) {
     const hist = document.getElementById("history");
+<<<<<<< HEAD
     const idx = history.length - 1;
     const item = document.createElement("div");
     item.className = "history-item";
@@ -573,6 +578,12 @@ Regeln:
       answerCard.style.display = "block";
       answerCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
     };
+=======
+    const item = document.createElement("div");
+    item.className = "history-item";
+    const preview = a.replace(/\*\*/g, "").split("\n")[0].slice(0, 100);
+    item.innerHTML = `<div class="history-q">? ${q}</div><div class="history-a">${preview}${a.length > 100 ? "…" : ""}</div>`;
+>>>>>>> 4bb9b10c368227558637762c094e841209df3c98
     hist.appendChild(item);
     hist.scrollTop = hist.scrollHeight;
   }
