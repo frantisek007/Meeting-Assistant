@@ -216,8 +216,14 @@
   #answer-text .step { margin-left: 4px; margin-top: 4px; }
   #answer-text .spacer { height: 6px; }
 
-  /* Thinking dots */
-  #thinking-dots { display: none; gap: 6px; align-items: center; }
+  /* Thinking dots & stop button */
+  #thinking-container {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #thinking-dots { display: flex; gap: 6px; align-items: center; }
   .tdot {
     width: 6px; height: 6px; border-radius: 50%;
     background: var(--accent2);
@@ -226,6 +232,23 @@
   .tdot:nth-child(2) { animation-delay: 0.2s; }
   .tdot:nth-child(3) { animation-delay: 0.4s; }
   @keyframes tdot-blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+  #btn-stop {
+    font-size: 11px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 4px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    transition: all 0.2s;
+  }
+  #btn-stop:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.05);
+  }
 
   /* Error */
   #error-msg { color: var(--danger); font-size: 12px; text-align: center; display: none; }
@@ -245,7 +268,6 @@
 </head>
 <body>
 
-<!-- Header -->
 <div id="header">
   <div id="header-left">
     <div id="status-dot"></div>
@@ -257,17 +279,14 @@
   </div>
 </div>
 
-<!-- API Key Banner -->
 <div id="api-banner">
   <span>🔑 Anthropic API-Schlüssel:</span>
   <input type="password" id="api-key-input" placeholder="sk-ant-..." />
   <button id="btn-save-key" onclick="saveKey()">Speichern</button>
 </div>
 
-<!-- History -->
 <div id="history"></div>
 
-<!-- Main -->
 <div id="main">
   <div id="not-supported">
     ⚠️ Dein Browser unterstützt keine Spracherkennung.<br>Bitte Chrome oder Edge verwenden.
@@ -292,10 +311,13 @@
     <span id="interim"></span>
   </div>
 
-  <div id="thinking-dots">
-    <div class="tdot"></div>
-    <div class="tdot"></div>
-    <div class="tdot"></div>
+  <div id="thinking-container">
+    <div id="thinking-dots">
+      <div class="tdot"></div>
+      <div class="tdot"></div>
+      <div class="tdot"></div>
+    </div>
+    <button id="btn-stop" onclick="stopGenerating()">Stop</button>
   </div>
 
   <div id="answer-card">
@@ -306,7 +328,6 @@
   <div id="error-msg"></div>
 </div>
 
-<!-- Footer -->
 <div id="footer">
   Mikrofon drücken · DE Sprache · nach 2 Sek. Stille automatisch senden
 </div>
@@ -333,6 +354,8 @@ Regeln:
   let phase = "idle"; // idle | listening | thinking | answer
   let history = [];
   let apiKey = "";
+  let abortController = null; // Controller pre moznost prerusenia fetch requestu
+
   try { apiKey = localStorage.getItem("mtg_api_key") || ""; } catch(e) {}
 
   // Init - show/hide banner
@@ -383,7 +406,7 @@ Regeln:
     const waveBars = document.querySelectorAll(".wave-bar");
     const hint = document.getElementById("hint");
     const statusLabel = document.getElementById("status-label");
-    const thinkingDots = document.getElementById("thinking-dots");
+    const thinkingContainer = document.getElementById("thinking-container");
 
     dot.className = "";
     micBtn.className = "";
@@ -392,17 +415,19 @@ Regeln:
     if (p === "idle") {
       dot.className = "";
       micBtn.innerHTML = "🎙";
+      micBtn.disabled = false;
       hint.textContent = history.length > 0 ? "Drück erneut für die nächste Frage" : "Mikrofon drücken und Frage stellen";
       statusLabel.textContent = history.length > 0 ? `${history.length} odpovedí` : "";
-      thinkingDots.style.display = "none";
+      thinkingContainer.style.display = "none";
     } else if (p === "listening") {
       dot.className = "listening";
       micBtn.className = "listening";
       micBtn.innerHTML = "⏹";
+      micBtn.disabled = false;
       hint.textContent = "Sprechen... (nach 2 Sek. Stille automatisch senden)";
       statusLabel.textContent = "🎙 höre zu...";
       waveBars.forEach(b => b.classList.add("active"));
-      thinkingDots.style.display = "none";
+      thinkingContainer.style.display = "none";
     } else if (p === "thinking") {
       dot.className = "thinking";
       micBtn.className = "thinking";
@@ -410,7 +435,7 @@ Regeln:
       micBtn.disabled = true;
       hint.textContent = "Frage wird analysiert...";
       statusLabel.textContent = "⟳ analysiere...";
-      thinkingDots.style.display = "flex";
+      thinkingContainer.style.display = "flex";
     } else if (p === "answer") {
       dot.className = "";
       micBtn.className = "";
@@ -418,7 +443,7 @@ Regeln:
       micBtn.disabled = false;
       hint.textContent = "Drück erneut für die nächste Frage";
       statusLabel.textContent = `${history.length} odpovedí`;
-      thinkingDots.style.display = "none";
+      thinkingContainer.style.display = "none";
     }
   }
 
@@ -513,6 +538,8 @@ Regeln:
     });
     msgs.push({ role: "user", content: question });
 
+    abortController = new AbortController();
+
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -522,6 +549,7 @@ Regeln:
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true"
         },
+        signal: abortController.signal,
         body: JSON.stringify({
           model: "claude-sonnet-4-5",
           max_tokens: 1000,
@@ -545,8 +573,22 @@ Regeln:
       }
 
     } catch (err) {
+      if (err.name === "AbortError") {
+        // Ignorujeme AbortError, pretože ho vyvolal používateľ zámerne tlačidlom Stop
+        return;
+      }
       showError("⚠️ API Fehler: " + err.message);
       setPhase("idle");
+    } finally {
+      abortController = null;
+    }
+  }
+
+  function stopGenerating() {
+    if (abortController) {
+      abortController.abort();
+      setPhase("idle");
+      document.getElementById("answer-card").style.display = "none";
     }
   }
 
@@ -608,6 +650,9 @@ Regeln:
 
   function clearAll() {
     stopListening();
+    if (abortController) {
+      abortController.abort();
+    }
     setPhase("idle");
     history = [];
     finalText = "";
